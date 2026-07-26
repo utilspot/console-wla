@@ -1,0 +1,6 @@
+/* config.h.  Generated from cconfig.h.in by CMake.  */
+
+#cmakedefine CONSOLE_ASSETS_DIR  "@CONSOLE_ASSETS_DIR@"
+#cmakedefine CONSOLE_BASE_URL    "@CONSOLE_BASE_URL@"
+#cmakedefine CONSOLE_ROOT_URL    "@CONSOLE_ROOT_URL@"
+#cmakedefine CONSOLE_SERVICE_URL "@CONSOLE_SERVICE_URL@"

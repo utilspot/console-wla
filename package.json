@@ -1,0 +1,52 @@
+{
+  "name": "console-wla",
+  "version": "1.0.0",
+  "description": "Browser terminal backed by a real server-side PTY",
+  "license": "MIT",
+  "type": "commonjs",
+  "homepage": "https://github.com/utilspot/console-wla",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/utilspot/console-wla.git"
+  },
+  "scripts": {
+    "dev": "concurrently -n server,client -c cyan,magenta \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "node --watch server.js --token dev",
+    "dev:client": "vite",
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.client.json",
+    "start": "node server.js",
+    "clean": "rm -rf dist",
+    "pretest": "npm run build",
+    "bitmake": "npx bitmake build",
+    "server": "./build/package/bin/console_server",
+    "test": "node test/smoke.js"
+  },
+  "keywords": [
+    "terminal",
+    "console",
+    "pty",
+    "xterm",
+    "shell",
+    "typescript"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "allowScripts": {
+    "node-pty@1.1.0": true,
+    "esbuild@0.28.1": true
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "@types/ws": "^8.18.1",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "bitmake": "^0.0.1-develop.15",
+    "concurrently": "^10.0.4",
+    "node-pty": "^1.1.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.1.5",
+    "ws": "^8.21.3"
+  }
+}

@@ -1,0 +1,255 @@
+:root {
+  --bg: #0b0f14;
+  --bar: #121821;
+  --bar-hi: #1b2431;
+  --line: #232d3b;
+  --text: #d6dee9;
+  --dim: #7d8b9e;
+  --accent: #67e8c3;
+  --danger: #ff7b72;
+  --link: #79c0ff;      /* the terminal palette's blue, from theme.ts */
+  --radius: 3px;
+  --gap: 4px;           /* how far the stage insets the panes it holds */
+  --header-h: 26px;
+  --footer-h: 26px;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  overflow: hidden;
+}
+
+/* ---------- split stage ---------- */
+
+#stage {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--gap);
+}
+
+/* A row or a column of consoles, nested to whatever depth the splits made. */
+.split {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+.split[data-dir="row"] { flex-direction: row; }
+.split[data-dir="column"] { flex-direction: column; }
+
+.pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 220px;
+  min-height: 90px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+}
+.pane.active { border-color: var(--line); }
+
+.pane-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  height: 24px;
+  padding: 0 4px 0 8px;
+  background: var(--bar);
+  border-bottom: 1px solid var(--line);
+  color: var(--dim);
+  font-size: 12px;
+}
+.pane.active .pane-head { background: var(--bar-hi); color: var(--text); }
+
+.pane-head .dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--dim);
+}
+.pane[data-state="open"] .dot { background: var(--accent); }
+.pane[data-state="lost"] .dot { background: #e3b341; }
+.pane[data-state="dead"] .dot { background: var(--danger); }
+
+/* The controls the top bar used to hold, one set per console. */
+.head-btn {
+  height: 18px;
+  min-width: 18px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  padding: 0 3px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1;
+  opacity: .55;
+  cursor: pointer;
+}
+.head-btn:hover { background: #ffffff1a; opacity: 1; }
+.head-btn svg { display: block; }
+.head-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Everything else sits on the left; only the close button is pushed right. */
+.head-btn.close { margin-left: auto; font-size: 13px; }
+.head-btn.close:hover { color: var(--danger); }
+/* Closing the only console would just open another one. */
+#stage[data-count="1"] .close { display: none; }
+
+.screen {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 6px 4px 4px 8px;
+}
+.screen .xterm { height: 100%; }
+
+/* ---------- splitters ---------- */
+
+.splitter {
+  flex: 0 0 7px;
+  position: relative;
+  touch-action: none;
+}
+.splitter[data-dir="row"] { cursor: col-resize; }
+.splitter[data-dir="column"] { cursor: row-resize; }
+.splitter::after {
+  content: "";
+  position: absolute;
+  border-radius: 1px;
+  background: var(--line);
+}
+.splitter[data-dir="row"]::after { inset: 10px 3px; }
+.splitter[data-dir="column"]::after { inset: 3px 10px; }
+.splitter:hover::after,
+.splitter:focus-visible::after,
+.splitter.dragging::after { background: var(--accent); }
+.splitter[data-dir="row"]:hover::after,
+.splitter[data-dir="row"]:focus-visible::after,
+.splitter[data-dir="row"].dragging::after { inset: 4px 3px; }
+.splitter[data-dir="column"]:hover::after,
+.splitter[data-dir="column"]:focus-visible::after,
+.splitter[data-dir="column"].dragging::after { inset: 3px 4px; }
+.splitter:focus-visible { outline: none; }
+body.resizing { user-select: none; }
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 12px;
+  justify-items: center;
+  background: #0b0f14cc;
+  backdrop-filter: blur(2px);
+  text-align: center;
+}
+.overlay[hidden] { display: none; }
+.overlay p { margin: 0; color: var(--dim); }
+.overlay strong { color: var(--text); font-weight: 600; }
+.overlay button {
+  padding: 7px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bar-hi);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.overlay button:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ---------- header ---------- */
+
+.header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: calc(var(--header-h) + var(--gap) + env(safe-area-inset-top, 0px));
+  /* The stage insets the panes by --gap, so the title carries the same inset
+   * above it: centring it in the bar alone leaves it --gap nearer the top of
+   * the window than the pane below it. Same left edge as the footer, so both
+   * line up with a pane's own header. */
+  padding: calc(var(--gap) + env(safe-area-inset-top, 0px)) 8px 0 calc(var(--gap) + 1px + 8px);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.header strong { font-weight: 600; }
+
+/* Only there when the console is mounted under a sub-path, and it always
+ * points at the site root rather than at that base. */
+.header .home {
+  flex: 0 0 auto;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bar);
+  color: var(--dim);
+  font-size: 11px;
+  line-height: 18px;
+  text-decoration: none;
+}
+.header .home:hover,
+.header .home:focus-visible { color: var(--link); border-color: var(--link); }
+
+/* ---------- footer ---------- */
+
+.footer {
+  flex: 0 0 auto;
+  height: calc(var(--footer-h) + env(safe-area-inset-bottom, 0px));
+  /* Left padding lines the text up with a pane's header: the stage's padding,
+   * the pane's border and the header's own left padding. */
+  padding: 0 8px env(safe-area-inset-bottom, 0px) calc(var(--gap) + 1px + 8px);
+  background: var(--bg);
+  color: var(--dim);
+  font-size: 12px;
+  line-height: var(--footer-h);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.footer a {
+  color: var(--dim);
+  text-decoration: none;
+}
+.footer a:hover,
+.footer a:focus-visible { color: var(--link); text-decoration: underline; }
+
+/* ---------- toast ---------- */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(22px + var(--footer-h));
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bar);
+  color: var(--text);
+  box-shadow: 0 6px 22px #0009;
+}
+.toast[hidden] { display: none; }
