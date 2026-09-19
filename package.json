@@ -1,6 +1,6 @@
 {
   "name": "console-wla",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Browser terminal backed by a real server-side PTY",
   "license": "MIT",
   "type": "commonjs",

@@ -79,7 +79,7 @@ export default {
     destDir,
   },
   "bundle:libnetq": {
-    sourceUrl: "https://github.com/yacubin/libnetq/archive/refs/tags/v1.0.18.tar.gz",
+    sourceUrl: "https://github.com/yacubin/libnetq/archive/refs/tags/v1.0.19.tar.gz",
     action: "cmake",
     cacheVariables: {
       CMAKE_PREFIX_PATH: destDir + prefix,
