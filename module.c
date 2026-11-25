@@ -6,6 +6,7 @@
 #define _GNU_SOURCE /* posix_openpt, ptsname_r */
 #endif
 
+#include <libnetq/Env.h>
 #include <libnetq/Library.h>
 #include <libnetq/Log.h>
 #include <libnetq/fs/Path.h>
@@ -27,12 +28,14 @@
 #include <libnetq/Mutex.h>
 #include <libnetq/NetworkLooper.h>
 #include <libnetq/Random.h>
+#include <libnetq/string/String.h>
 #include <libnetq/string/StringUtil.h>
 
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
 #include <signal.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
@@ -122,23 +125,30 @@ static struct ConsoleStore s_store = {
 
 /* ---- settings ----------------------------------------------------------- */
 
-static const char* consoleShell(void)
-{
-  const char* shell = getenv("WEBCONSOLE_SHELL");
-  if (NQCStrIsNullOrEmpty(shell))
-    shell = getenv("SHELL");
-  return NQCStrIsNullOrEmpty(shell) ? "/bin/sh" : shell;
-}
+#define CONSOLE_DEFAULT_SHELL  "/bin/sh"
 
-static const char* consoleCwd(void)
+/* The caller owns the result (NQEnvFree); NULL means nothing is configured and
+ * CONSOLE_DEFAULT_SHELL applies. */
+static const char* consoleShellCreate(void)
 {
-  return getenv("WEBCONSOLE_CWD");
+  const char* shell = NQEnvCreate("WEBCONSOLE_SHELL");
+  if (NQCStrIsNullOrEmpty(shell)) {
+    NQEnvFree(shell);
+    shell = NQEnvCreate("SHELL");
+  }
+  if (NQCStrIsNullOrEmpty(shell)) {
+    NQEnvFree(shell);
+    return NULL;
+  }
+  return shell;
 }
 
 static bool consoleReadOnly(void)
 {
-  const char* value = getenv("WEBCONSOLE_READ_ONLY");
-  return !NQCStrIsNullOrEmpty(value) && *value != '0' && *value != 'f' && *value != 'F';
+  const char* value = NQEnvCreate("WEBCONSOLE_READ_ONLY");
+  bool readOnly = !NQCStrIsNullOrEmpty(value) && *value != '0' && *value != 'f' && *value != 'F';
+  NQEnvFree(value);
+  return readOnly;
 }
 
 static uint16_t clampCols(int64_t cols)
@@ -164,7 +174,7 @@ static bool consoleJsonWrite(void* userdata, const char* characters, size_t size
   struct ConsoleJson* json = (struct ConsoleJson*)userdata;
   if (json->size + size > sizeof(json->data))
     return false;
-  memcpy(json->data + json->size, characters, size);
+  NQMemcpy(json->data + json->size, characters, size);
   json->size += size;
   return true;
 }
@@ -235,7 +245,7 @@ static void scrollbackAppend(ConsoleSession* session, const uint8_t* data, size_
     return;
 
   if (size >= CONSOLE_SCROLLBACK) {
-    memcpy(session->scrollback, data + size - CONSOLE_SCROLLBACK, CONSOLE_SCROLLBACK);
+    NQMemcpy(session->scrollback, data + size - CONSOLE_SCROLLBACK, CONSOLE_SCROLLBACK);
     session->scrollbackHead = 0;
     session->scrollbackSize = CONSOLE_SCROLLBACK;
     return;
@@ -245,9 +255,9 @@ static void scrollbackAppend(ConsoleSession* session, const uint8_t* data, size_
   first = CONSOLE_SCROLLBACK - tail;
   if (first > size)
     first = size;
-  memcpy(session->scrollback + tail, data, first);
+  NQMemcpy(session->scrollback + tail, data, first);
   if (first < size)
-    memcpy(session->scrollback, data + first, size - first);
+    NQMemcpy(session->scrollback, data + first, size - first);
 
   total = session->scrollbackSize + size;
   if (total > CONSOLE_SCROLLBACK) {
@@ -299,8 +309,8 @@ static void consoleCloseInherited(void)
 static int consoleSpawn(ConsoleSession* session)
 {
   char slavePath[128];
-  const char* shell = consoleShell();
-  const char* cwd = consoleCwd();
+  const char* shell;
+  const char* cwd;
   struct winsize size;
   pid_t pid;
   int flags;
@@ -359,9 +369,14 @@ static int consoleSpawn(ConsoleSession* session)
   size.ws_col = session->cols;
   size.ws_row = session->rows;
 
+  shell = consoleShellCreate();
+  cwd = NQEnvCreate("WEBCONSOLE_CWD");
+
   pid = fork();
   if (pid < 0) {
     NQ_LOGE("Cannot fork a shell (errno %d)", NQGetLastError());
+    NQEnvFree(shell);
+    NQEnvFree(cwd);
     if (slave >= 0)
       close(slave);
     close(master);
@@ -401,16 +416,22 @@ static int consoleSpawn(ConsoleSession* session)
       close(slave);
     consoleCloseInherited();
 
-    if (!NQCStrIsNullOrEmpty(cwd))
-      (void)chdir(cwd);
+    if (!NQCStrIsNullOrEmpty(cwd) && chdir(cwd) != 0) {
+      /* Not fatal: the shell starts in the inherited directory instead. */
+    }
 
-    setenv("TERM", "xterm-256color", 1);
-    setenv("COLORTERM", "truecolor", 1);
-    setenv("WEBCONSOLE", "1", 1);
+    NQEnvSet("TERM", "xterm-256color");
+    NQEnvSet("COLORTERM", "truecolor");
+    NQEnvSet("WEBCONSOLE", "1");
 
+    if (shell == NULL)
+      shell = CONSOLE_DEFAULT_SHELL;
     execl(shell, shell, (char*)NULL);
     _exit(CONSOLE_EXIT_NOEXEC);
   }
+
+  NQEnvFree(shell);
+  NQEnvFree(cwd);
 
   if (slave >= 0)
     close(slave);   /* the child's end is the child's alone */
@@ -679,8 +700,11 @@ static void sessionShellExited(ConsoleSession* session)
 
   /* A shell that stops on its own is ordinary; these are the ways it never
    * really started, which nothing else would report. */
-  if (session->exitCode == CONSOLE_EXIT_NOEXEC)
-    NQ_LOGE("Session %s: cannot start the shell '%s'", session->id, consoleShell());
+  if (session->exitCode == CONSOLE_EXIT_NOEXEC) {
+    const char* shell = consoleShellCreate();
+    NQ_LOGE("Session %s: cannot start the shell '%s'", session->id, shell != NULL ? shell : CONSOLE_DEFAULT_SHELL);
+    NQEnvFree(shell);
+  }
   else if (session->exitCode == CONSOLE_EXIT_NOTTY)
     NQ_LOGE("Session %s: the shell could not open the terminal it was given", session->id);
   else if (session->exitSignal != 0)
