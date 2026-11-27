@@ -60,8 +60,11 @@ source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES server.c)
 add_executable(console_server server.c)
 target_link_libraries(console_server PRIVATE LibNetQ::LibNetQ)
 
-if (CMAKE_C_COMPILER_ID MATCHES "^(GNU|Clang)$")
-  target_link_options(console_server PRIVATE "-Wl,-rpath,$ORIGIN/../lib")
+if (APPLE)
+  set_target_properties(console_server PROPERTIES INSTALL_RPATH "@loader_path/../lib")
+elseif (UNIX)
+  set_target_properties(console_server PROPERTIES INSTALL_RPATH "$ORIGIN/../lib")
+  target_link_options(console_server PRIVATE -Wl,--disable-new-dtags)
 endif ()
 
 if (CONSOLE_INSTALL_SERVER)
